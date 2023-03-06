@@ -15,6 +15,7 @@ function initStore() {
   setIfUnset('lastFm', {});
   setIfUnset('settings', {});
   setIfUnset('playLists', []);
+  setIfUnset('queue', {});
 
   setIfUnset('favorites', {
     tracks: [],

@@ -2,13 +2,13 @@ import logger from 'electron-timber';
 import _, { isEmpty, isString } from 'lodash';
 import { createStandardAction } from 'typesafe-actions';
 
-import { StreamProvider } from '@nuclear/core';
+import { StreamProvider, store, PlaylistHelper } from '@nuclear/core';
 import { getTrackArtist } from '@nuclear/ui';
 import { Track } from '@nuclear/ui/lib/types';
 
 import { safeAddUuid } from './helpers';
 import { pausePlayback, startPlayback } from './player';
-import { QueueItem, TrackStream } from '../reducers/queue';
+import { QueueItem, QueueStore, TrackStream } from '../reducers/queue';
 import { RootState } from '../reducers';
 import { LocalLibraryState } from './local';
 import { Queue } from './actionTypes';
@@ -39,6 +39,11 @@ const localTrackToQueueItem = (track: LocalTrack, local: LocalLibraryState): Que
   });
 };
 
+const updateQueueStore = () => async (getState) => {
+  const { queue } = getState();
+  const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+  store.set('queue', { ...queue, queueItems: formatedQueue });
+};
 
 export const toQueueItem = (track: Track): QueueItem => ({
   ...track,
@@ -115,24 +120,29 @@ export const playNext = (item: QueueItem) => addToQueue(item, true);
 export const addToQueue =
   (item: QueueItem, asNextItem = false) =>
     async (dispatch, getState) => {
-      const { local }: RootState = getState();
+      const { local, connectivity }: RootState = getState();
       item = {
         ...safeAddUuid(item),
         streams: item.local ? item.streams : [],
         loading: false
       };
 
-      const {
-        connectivity
-      } = getState();
       const isAbleToAdd = (!connectivity && item.local) || connectivity;
 
-      if (isAbleToAdd && item.local) {
+      if (!isAbleToAdd) {
+        return;
+      }
+
+      if (item.local) {
         dispatch(!asNextItem ? addQueueItem(localTrackToQueueItem(item as LocalTrack, local)) : playNextItem(localTrackToQueueItem(item as LocalTrack, local)));
       } else {
-        isAbleToAdd &&
-          dispatch(!asNextItem ? addQueueItem(item) : playNextItem(item));
+        dispatch(!asNextItem ? addQueueItem(item) : playNextItem(item));
       }
+
+      const { queue } = getState();
+      const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+      store.set('queue', { ...queue, queueItems: formatedQueue });
+      // updateQueueStore();
     };
 
 export const selectNewStream = (track: QueueItem, streamId: string) => async (dispatch, getState) => {
@@ -158,6 +168,12 @@ export const selectNewStream = (track: QueueItem, streamId: string) => async (di
       })
     );
   }
+
+  logger.error('SELECT NEW STREAM');
+
+  const { queue } = getState();
+  const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+  store.set('queue', { ...queue, queueItems: formatedQueue });
 };
 
 export const findStreamsForTrack = (idx: number) => async (dispatch, getState) => {
@@ -205,6 +221,10 @@ export const findStreamsForTrack = (idx: number) => async (dispatch, getState) =
         })
       );
     }
+
+    const { queue } = getState();
+    const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+    store.set('queue', { ...queue, queueItems: formatedQueue });
   }
 };
 
@@ -231,9 +251,7 @@ export function addPlaylistTracksToQueue(tracks) {
 }
 
 function dispatchWithShuffle(dispatch, getState, action) {
-  const state = getState();
-  const settings = state.settings;
-  const queue = state.queue;
+  const { settings, queue } = getState();
 
   if (settings.shuffleQueue) {
     const index = _.random(0, queue.queueItems.length - 1);
@@ -241,18 +259,23 @@ function dispatchWithShuffle(dispatch, getState, action) {
   } else {
     dispatch(action());
   }
+
+  const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+  store.set('queue', { ...queue, queueItems: formatedQueue });
 }
 
 export function previousSong() {
   return (dispatch, getState) => {
-    const state = getState();
-    const settings = state.settings;
+    const {settings, queue} = getState();
 
     if (settings.shuffleWhenGoingBack) {
       dispatchWithShuffle(dispatch, getState, previousSongAction);
     } else {
       dispatch(previousSongAction());
     }
+
+    const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+    store.set('queue', { ...queue, queueItems: formatedQueue });
   };
 }
 
@@ -261,5 +284,9 @@ export function nextSong() {
     dispatchWithShuffle(dispatch, getState, nextSongAction);
     dispatch(pausePlayback(false));
     setImmediate(() => dispatch(startPlayback(false)));
+
+    const { queue } = getState();
+    const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+    store.set('queue', { ...queue, queueItems: formatedQueue });
   };
 }
