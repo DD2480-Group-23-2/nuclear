@@ -2,7 +2,7 @@ import logger from 'electron-timber';
 import _, { isEmpty, isString } from 'lodash';
 import { createStandardAction } from 'typesafe-actions';
 
-import { StreamProvider } from '@nuclear/core';
+import { PlaylistHelper, store, StreamProvider } from '@nuclear/core';
 import { getTrackArtist } from '@nuclear/ui';
 import { Track } from '@nuclear/ui/lib/types';
 
@@ -133,6 +133,10 @@ export const addToQueue =
         isAbleToAdd &&
           dispatch(!asNextItem ? addQueueItem(item) : playNextItem(item));
       }
+
+      const { queue } = getState();
+      const formatedQueue = PlaylistHelper.formatTrackList(queue.queueItems);
+      store.set('queue', { ...queue, queueItems: formatedQueue });
     };
 
 export const selectNewStream = (track: QueueItem, streamId: string) => async (dispatch, getState) => {
